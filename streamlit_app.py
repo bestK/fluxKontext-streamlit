@@ -292,7 +292,7 @@ def main():
             for i, uploaded_file in enumerate(uploaded_files):
                 with cols[i]:
                     image = Image.open(uploaded_file)
-                    st.image(image, caption=f"图片 {i+1}", use_column_width=True)
+                    st.image(image, caption=f"图片 {i+1}", use_container_width =True)
 
     with col2:
         st.markdown('<h2 class="sub-header">✏️ 编辑指令</h2>', unsafe_allow_html=True)
@@ -483,7 +483,7 @@ def main():
 
         with col7:
             result_image = Image.open(st.session_state.result_image)
-            st.image(result_image, caption="编辑后的图片", use_column_width=True)
+            st.image(result_image, caption="编辑后的图片", use_container_width =True)
 
             # 下载按钮
             with open(st.session_state.result_image, "rb") as file:
