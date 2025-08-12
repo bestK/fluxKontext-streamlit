@@ -77,6 +77,8 @@ def init_session_state():
         st.session_state.edit_instruction = ""
     if "api_key" not in st.session_state:
         st.session_state.api_key = ""
+    if "base_url" not in st.session_state:
+        st.session_state.base_url = "https://api.bfl.ai"
     if "api_configured" not in st.session_state:
         st.session_state.api_configured = False
 
@@ -85,12 +87,19 @@ def load_editor():
     """加载编辑器"""
     try:
         if st.session_state.editor is None:
-            # 使用页面配置的API密钥
+            # 使用页面配置的API密钥和BASE_URL
             if st.session_state.api_key.strip():
+                # 验证和格式化BASE_URL
+                base_url = st.session_state.base_url.strip()
+                if not base_url:
+                    base_url = "https://api.bfl.ai"
+                elif not base_url.startswith("http"):
+                    base_url = f"https://{base_url}"
+
                 # 临时创建配置文件
                 config_content = f"""[API]
 X_KEY = {st.session_state.api_key.strip()}
-BASE_URL = https://api.bfl.ai
+BASE_URL = {base_url}
 """
                 with open("temp_config.ini", "w", encoding="utf-8") as f:
                     f.write(config_content)
@@ -128,13 +137,41 @@ def create_config_section():
         help="从 https://api.bfl.ai 获取您的API密钥",
     )
 
+    # 自定义BASE_URL配置
+    base_url_input = st.text_input(
+        "API服务器地址",
+        value=st.session_state.base_url,
+        placeholder="https://api.bfl.ai",
+        help="API服务器的基础URL，支持自定义服务器",
+    )
+
+    # 检查配置是否有变化
+    config_changed = False
     if api_key_input != st.session_state.api_key:
         st.session_state.api_key = api_key_input
-        st.session_state.editor = None  # 重置编辑器以使用新密钥
+        config_changed = True
+
+    if base_url_input != st.session_state.base_url:
+        st.session_state.base_url = base_url_input
+        config_changed = True
+
+    if config_changed:
+        st.session_state.editor = None  # 重置编辑器以使用新配置
         st.session_state.api_configured = False
 
     if st.session_state.api_key.strip():
         st.success("✅ API密钥已配置")
+
+        # 显示当前BASE_URL
+        current_base_url = (
+            st.session_state.base_url.strip()
+            if st.session_state.base_url.strip()
+            else "https://api.bfl.ai"
+        )
+        if not current_base_url.startswith("http"):
+            current_base_url = f"https://{current_base_url}"
+        st.info(f"🔗 当前API服务器: {current_base_url}")
+
         if st.button("🧪 测试API连接"):
             with st.spinner("正在测试API连接..."):
                 if load_editor():
@@ -292,7 +329,7 @@ def main():
             for i, uploaded_file in enumerate(uploaded_files):
                 with cols[i]:
                     image = Image.open(uploaded_file)
-                    st.image(image, caption=f"图片 {i+1}", use_container_width =True)
+                    st.image(image, caption=f"图片 {i+1}", use_container_width=True)
 
     with col2:
         st.markdown('<h2 class="sub-header">✏️ 编辑指令</h2>', unsafe_allow_html=True)
@@ -483,7 +520,7 @@ def main():
 
         with col7:
             result_image = Image.open(st.session_state.result_image)
-            st.image(result_image, caption="编辑后的图片", use_container_width =True)
+            st.image(result_image, caption="编辑后的图片", use_container_width=True)
 
             # 下载按钮
             with open(st.session_state.result_image, "rb") as file:
