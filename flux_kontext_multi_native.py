@@ -251,6 +251,8 @@ class FluxKontextNativeMultiEditor:
             if response.status_code == 200:
                 response_data = response.json()
                 task_id = response_data.get("id")
+                polling_url = response_data.get("polling_url")
+                print(f"🔄 轮询URL: {polling_url}")
 
                 if not task_id:
                     print("❌ 未收到任务ID")
@@ -265,7 +267,7 @@ class FluxKontextNativeMultiEditor:
 
                 # 等待结果
                 result_image = self.wait_for_result(
-                    task_id, progress_callback=progress_callback
+                    polling_url, progress_callback=progress_callback
                 )
 
                 if result_image is not None:
@@ -331,10 +333,10 @@ class FluxKontextNativeMultiEditor:
             print(f"❌ 图像编码错误: {str(e)}")
             return None
 
-    def wait_for_result(self, task_id, max_attempts=30, progress_callback=None):
+    def wait_for_result(self, polling_url, max_attempts=30, progress_callback=None):
         """等待API处理结果"""
-        print(f"⏳ 等待处理结果: {task_id}")
-        base_url = os.environ.get("BASE_URL", "https://api.bfl.ai")
+        print(f"⏳ 等待处理结果: {polling_url}")
+       
 
         if progress_callback:
             progress_callback("🚀 任务已提交，开始处理...", 0, max_attempts)
@@ -354,12 +356,11 @@ class FluxKontextNativeMultiEditor:
                 print(f"🔄 尝试 {attempt}/{max_attempts} - 等待 {wait_time}秒")
                 time.sleep(wait_time)
 
-                # 检查任务状态
-                get_url = f"{base_url}/v1/get_result?id={task_id}"
+                # 检查任务状态 
                 headers = {"x-key": os.environ["X_KEY"]}
-                print(f"🔄 检查任务状态: {get_url}")
+                print(f"🔄 检查任务状态: {polling_url}")
 
-                response = requests.get(get_url, headers=headers, timeout=30)
+                response = requests.get(polling_url, headers=headers, timeout=30)
 
                 if response.status_code != 200:
                     print(f"⚠️  状态检查失败: {response.status_code}")
