@@ -392,9 +392,7 @@ def main():
 
     with col4:
         if st.button("🎨 开始AI编辑", type="primary"):
-            if not uploaded_files:
-                st.error("❌ 请先上传图片")
-            elif not st.session_state.edit_instruction.strip():
+            if not st.session_state.edit_instruction.strip():
                 st.error("❌ 请输入编辑指令")
             elif not st.session_state.api_key.strip():
                 st.error("❌ 请先在侧边栏配置API密钥")
