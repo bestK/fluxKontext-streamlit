@@ -59,6 +59,37 @@ st.markdown(
         border: 1px solid #BEE5EB;
         color: #0C5460;
     }
+    .fixed-log-container {
+        height: 200px;
+        max-height: 200px;
+        overflow-y: auto;
+        background-color: #1e1e1e;
+        color: #ffffff;
+        border: 1px solid #404040;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        scroll-behavior: smooth;
+        box-sizing: border-box;
+    }
+    .fixed-log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .fixed-log-container::-webkit-scrollbar-track {
+        background: #2a2a2a;
+        border-radius: 4px;
+    }
+    .fixed-log-container::-webkit-scrollbar-thumb {
+        background: #555555;
+        border-radius: 4px;
+    }
+    .fixed-log-container::-webkit-scrollbar-thumb:hover {
+        background: #777777;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -81,6 +112,10 @@ def init_session_state():
         st.session_state.base_url = "https://api.bfl.ai"
     if "api_configured" not in st.session_state:
         st.session_state.api_configured = False
+    if "log_messages" not in st.session_state:
+        st.session_state.log_messages = []
+    if "log_expanded" not in st.session_state:
+        st.session_state.log_expanded = True
 
 
 def load_editor():
@@ -190,6 +225,44 @@ def create_config_section():
     3. 将密钥粘贴到上方输入框中
     """
     )
+
+
+def render_collapsible_log(key_suffix=""):
+    """渲染可折叠的日志容器"""
+    if not st.session_state.log_messages:
+        return
+
+    st.markdown("#### 📋 处理日志")
+
+    # 如果展开状态，显示日志
+    if st.session_state.log_expanded:
+        # 显示最近的日志（限制显示条数以提高性能）
+        recent_logs = st.session_state.log_messages[-15:]  # 只显示最近15条日志
+        log_text = "\n".join(recent_logs)
+
+        # HTML转义日志内容
+        import html
+
+        escaped_log_text = html.escape(log_text)
+
+        # 创建一个带滚动的日志容器
+        log_container_html = f"""
+        <div style="
+            height: 200px; 
+            overflow-y: auto; 
+            background-color: #1e1e1e; 
+            color: #ffffff; 
+            padding: 10px; 
+            border-radius: 5px; 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+            font-size: 0.85rem; 
+            line-height: 1.4; 
+            white-space: pre-wrap; 
+            border: 1px solid #404040;
+            ">{escaped_log_text}</div>
+        """
+
+        st.markdown(log_container_html, unsafe_allow_html=True)
 
 
 def quality_presets():
@@ -307,14 +380,16 @@ def main():
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.markdown('<h2 class="sub-header">📸 上传图片</h2>', unsafe_allow_html=True)
+        st.markdown(
+            '<h2 class="sub-header">📸 上传图片（可选）</h2>', unsafe_allow_html=True
+        )
 
         # 图片上传
         uploaded_files = st.file_uploader(
-            "选择要编辑的图片（最多4张）",
+            "选择要编辑的图片（可选，最多4张）",
             type=["jpg", "jpeg", "png"],
             accept_multiple_files=True,
-            help="支持JPG、JPEG、PNG格式，最多同时处理4张图片",
+            help="可选择上传JPG、JPEG、PNG格式图片进行编辑。如不上传，将进行纯文本生成",
         )
 
         if uploaded_files:
@@ -332,15 +407,17 @@ def main():
                     st.image(image, caption=f"图片 {i+1}", use_container_width=True)
 
     with col2:
-        st.markdown('<h2 class="sub-header">✏️ 编辑指令</h2>', unsafe_allow_html=True)
+        st.markdown(
+            '<h2 class="sub-header">✏️ 生成/编辑指令</h2>', unsafe_allow_html=True
+        )
 
         # 编辑指令输入
         edit_instruction = st.text_area(
-            "描述您想要的编辑效果",
+            "描述您想要的图片效果",
             value=st.session_state.edit_instruction,
             height=100,
             placeholder="例如：Create a photo of exactly one person with one golden retriever dog, sitting together in a cozy living room",
-            help="用自然语言描述您希望如何编辑图片",
+            help="用自然语言描述您希望生成或编辑的图片效果。如果上传了图片，将进行编辑；否则将从头生成新图片",
             key="edit_instruction_input",
         )
 
@@ -350,24 +427,42 @@ def main():
 
         # 快速提示词模板
         st.markdown("#### 🚀 快速模板")
+
+        # 显示当前模式
+        has_images = uploaded_files and len(uploaded_files) > 0
+        mode_text = "🖼️ 图片编辑模式" if has_images else "🎨 文本生成模式"
+        st.info(f"当前模式: {mode_text}")
+
         template_cols = st.columns(2)
 
         with template_cols[0]:
             if st.button("👨‍👩‍👧‍👦 家庭合照"):
-                st.session_state.edit_instruction = "Create a warm family portrait with all people sitting together in a cozy living room, natural lighting, professional photography"
+                if has_images:
+                    st.session_state.edit_instruction = "Create a warm family portrait with all people sitting together in a cozy living room, natural lighting, professional photography"
+                else:
+                    st.session_state.edit_instruction = "Generate a warm family portrait of 4 people (parents and 2 children) sitting together in a cozy living room, natural lighting, professional photography, high quality"
                 st.rerun()
 
             if st.button("🐕 人宠合影"):
-                st.session_state.edit_instruction = "Create a photo of exactly one person with one golden retriever dog, sitting side by side in a living room, high quality portrait"
+                if has_images:
+                    st.session_state.edit_instruction = "Create a photo of exactly one person with one golden retriever dog, sitting side by side in a living room, high quality portrait"
+                else:
+                    st.session_state.edit_instruction = "Generate a photo of exactly one person with one golden retriever dog, sitting side by side in a living room, high quality portrait, professional photography"
                 st.rerun()
 
         with template_cols[1]:
-            if st.button("🏞️ 风景融合"):
-                st.session_state.edit_instruction = "Combine these landscapes into a beautiful panoramic view, natural lighting, scenic composition"
+            if st.button("🏞️ 风景照片"):
+                if has_images:
+                    st.session_state.edit_instruction = "Combine these landscapes into a beautiful panoramic view, natural lighting, scenic composition"
+                else:
+                    st.session_state.edit_instruction = "Generate a beautiful landscape panoramic view with mountains, lake, and trees, natural lighting, scenic composition, 4K quality"
                 st.rerun()
 
             if st.button("🛍️ 产品展示"):
-                st.session_state.edit_instruction = "Create a professional product showcase with all items on a modern display, white background, commercial photography"
+                if has_images:
+                    st.session_state.edit_instruction = "Create a professional product showcase with all items on a modern display, white background, commercial photography"
+                else:
+                    st.session_state.edit_instruction = "Generate a professional product showcase of modern electronics on a clean white background, commercial photography, studio lighting, 4K quality"
                 st.rerun()
 
         # 质量关键词添加
@@ -391,9 +486,16 @@ def main():
     col3, col4, col5 = st.columns([1, 2, 1])
 
     with col4:
-        if st.button("🎨 开始AI编辑", type="primary"):
+        # 动态按钮文本
+        button_text = (
+            "🎨 开始AI编辑"
+            if (uploaded_files and len(uploaded_files) > 0)
+            else "🎨 开始AI生成"
+        )
+
+        if st.button(button_text, type="primary"):
             if not st.session_state.edit_instruction.strip():
-                st.error("❌ 请输入编辑指令")
+                st.error("❌ 请输入生成/编辑指令")
             elif not st.session_state.api_key.strip():
                 st.error("❌ 请先在侧边栏配置API密钥")
             else:
@@ -404,18 +506,27 @@ def main():
                 # 开始处理
                 st.session_state.processing = True
 
-                # 保存上传的文件
+                # 保存上传的文件（如果有的话）
                 temp_paths = []
-                for i, uploaded_file in enumerate(uploaded_files):
-                    temp_path = f"temp_image_{i}.{uploaded_file.name.split('.')[-1]}"
-                    with open(temp_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    temp_paths.append(temp_path)
+                if uploaded_files:
+                    for i, uploaded_file in enumerate(uploaded_files):
+                        temp_path = (
+                            f"temp_image_{i}.{uploaded_file.name.split('.')[-1]}"
+                        )
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        temp_paths.append(temp_path)
 
-                # 创建进度显示区域
-                progress_container = st.container()
-                with progress_container:
-                    st.markdown("### 🔄 处理进度")
+                # 清空之前的日志
+                st.session_state.log_messages = []
+
+                # 创建并排布局：左侧进度，右侧结果
+                st.markdown("### 🔄 处理进度与结果")
+                main_col1, main_col2 = st.columns([1, 1])
+
+                # 左侧：进度显示
+                with main_col1:
+                    st.markdown("#### ⏳ 处理进度")
 
                     # 主进度条
                     progress_bar = st.progress(0)
@@ -427,10 +538,17 @@ def main():
                     with status_col2:
                         progress_percent = st.empty()
 
-                    # 详细日志区域
+                    # 日志区域 - 创建固定的日志容器
                     st.markdown("#### 📋 处理日志")
-                    log_container = st.container()
-                    log_messages = []
+
+                    # 日志内容占位符
+                    log_content_placeholder = st.empty()
+
+                # 右侧：结果预览
+                with main_col2:
+                    st.markdown("#### 🎊 结果预览")
+                    result_placeholder = st.empty()
+                    download_placeholder = st.empty()
 
                 # 进度回调函数
                 def update_progress(message, current, total):
@@ -448,14 +566,43 @@ def main():
 
                     # 添加到日志
                     timestamp = time.strftime("%H:%M:%S")
-                    log_messages.append(f"[{timestamp}] {message}")
+                    st.session_state.log_messages.append(f"[{timestamp}] {message}")
 
-                    # 显示最近的日志（最多显示8条）
-                    recent_logs = log_messages[-8:]
-                    log_text = "\n".join(recent_logs)
+                    # 更新日志内容（只有在展开状态才显示）
+                    if st.session_state.log_expanded:
+                        # 显示最近的日志（限制显示条数以提高性能）
+                        recent_logs = st.session_state.log_messages[
+                            -15:
+                        ]  # 只显示最近15条日志
+                        log_text = "\n".join(recent_logs)
 
-                    with log_container:
-                        st.code(log_text, language=None)
+                        # HTML转义日志内容
+                        import html
+
+                        escaped_log_text = html.escape(log_text)
+
+                        # 创建一个带滚动的日志容器
+                        log_container_html = f"""
+                        <div style="
+                            height: 200px; 
+                            overflow-y: auto; 
+                            background-color: #1e1e1e; 
+                            color: #ffffff; 
+                            padding: 10px; 
+                            border-radius: 5px; 
+                            font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
+                            font-size: 0.85rem; 
+                            line-height: 1.4; 
+                            white-space: pre-wrap; 
+                            border: 1px solid #404040;
+                            ">{escaped_log_text}</div>
+                        """
+
+                        with log_content_placeholder:
+                            st.markdown(log_container_html, unsafe_allow_html=True)
+                    else:
+                        # 折叠状态下清空内容
+                        log_content_placeholder.empty()
 
                     # 强制刷新界面
                     time.sleep(0.1)
@@ -482,12 +629,33 @@ def main():
                         update_progress("🎉 编辑完成！", 100, 100)
                         st.session_state.result_image = result
 
-                        # 显示成功消息
-                        st.success("🎉 图片编辑成功完成!")
+                        # 在右侧显示结果
+                        with result_placeholder.container():
+                            result_image = Image.open(result)
+                            st.image(
+                                result_image,
+                                caption="生成/编辑后的图片",
+                                use_container_width=True,
+                            )
 
-                        # 清除进度显示
-                        time.sleep(2)
-                        progress_container.empty()
+                        # 在右侧显示下载按钮
+                        with download_placeholder.container():
+                            download_label = (
+                                "📥 下载编辑后的图片"
+                                if (uploaded_files and len(uploaded_files) > 0)
+                                else "📥 下载生成的图片"
+                            )
+                            with open(result, "rb") as file:
+                                st.download_button(
+                                    label=download_label,
+                                    data=file.read(),
+                                    file_name=f"flux_generated_{int(time.time())}.{output_format}",
+                                    mime=f"image/{output_format}",
+                                    key="download_progress_result",
+                                )
+
+                        # 显示成功消息
+                        st.success("🎉 图片处理成功完成!")
 
                     else:
                         update_progress("❌ 编辑失败", 100, 100)
@@ -509,37 +677,22 @@ def main():
 
                     st.session_state.processing = False
 
-    # 显示结果
-    if st.session_state.result_image and os.path.exists(st.session_state.result_image):
-        st.markdown("---")
-        st.markdown('<h2 class="sub-header">🎊 编辑结果</h2>', unsafe_allow_html=True)
-
-        col6, col7, col8 = st.columns([1, 2, 1])
-
-        with col7:
-            result_image = Image.open(st.session_state.result_image)
-            st.image(result_image, caption="编辑后的图片", use_container_width=True)
-
-            # 下载按钮
-            with open(st.session_state.result_image, "rb") as file:
-                st.download_button(
-                    label="📥 下载编辑后的图片",
-                    data=file.read(),
-                    file_name=f"flux_edited_{int(time.time())}.{output_format}",
-                    mime=f"image/{output_format}",
-                )
-
     # 使用技巧
     with st.expander("💡 使用技巧和建议"):
         st.markdown(
             """
         ### 🎯 获得最佳效果的建议
         
+        **🔄 工作模式:**
+        - **图片编辑模式**: 上传图片进行AI编辑和融合
+        - **文本生成模式**: 仅输入文字描述，从头生成全新图片
+        
         **📸 提示词技巧:**
         - 使用具体、详细的描述
         - 指定确切的人数和物体数量
         - 添加质量关键词如 "professional photography", "4K resolution"
         - 描述光照和构图，如 "natural lighting", "perfect composition"
+        - **文本生成时**: 更详细地描述场景、人物、环境和风格
         
         **⚙️ 参数建议:**
         - **高质量**: 选择Max模型 + 启用提示词增强
@@ -553,10 +706,17 @@ def main():
         - 超高清: `4K resolution, 8K ultra HD, crystal clear`
         - 艺术: `masterpiece, fine art, museum quality`
         
+        **💡 文本生成技巧:**
+        - 详细描述人物外观、服装、表情
+        - 明确指定场景环境和背景
+        - 添加摄影风格和光照描述
+        - 使用艺术风格关键词增强效果
+        
         **⚠️ 常见问题:**
         - 如果出现多余人物，降低安全等级并使用更明确的提示词
         - 如果质量不够，选择Max模型并添加质量关键词
         - 如果处理失败，检查API密钥和网络连接
+        - 文本生成时要更详细描述，避免模糊表达
         """
         )
 

@@ -141,13 +141,13 @@ class FluxKontextNativeMultiEditor:
                 progress_callback("❌ 编辑指令不能为空", 0, 100)
             return None
 
-        if not image_paths:
-            print("❌ 没有提供输入图片")
-            if progress_callback:
-                progress_callback("❌ 没有提供输入图片", 0, 100)
-            return None
+        # if not image_paths:
+        #     print("❌ 没有提供输入图片")
+        #     if progress_callback:
+        #         progress_callback("❌ 没有提供输入图片", 0, 100)
+        #     return None
 
-        if len(image_paths) > 4:
+        if image_paths is not None and len(image_paths) > 4:
             print("⚠️  API最多支持4张图片，将使用前4张")
             if progress_callback:
                 progress_callback("⚠️ API最多支持4张图片，将使用前4张", 10, 100)
@@ -158,48 +158,57 @@ class FluxKontextNativeMultiEditor:
             if progress_callback:
                 progress_callback("🔄 正在处理图片...", 20, 100)
 
+            if image_paths is None:
+                image_paths = []
+
+            # 初始化 base64_images 列表
             base64_images = []
-            for i, path in enumerate(image_paths):
-                if not os.path.exists(path):
-                    print(f"❌ 图片文件不存在: {path}")
-                    if progress_callback:
-                        progress_callback(f"❌ 图片文件不存在: {path}", 20, 100)
-                    return None
 
-                try:
-                    image = Image.open(path)
-                    if image.mode != "RGB":
-                        image = image.convert("RGB")
-
-                    # 调整图片大小以符合API要求
-                    max_size = 2048
-                    if max(image.size) > max_size:
-                        ratio = max_size / max(image.size)
-                        new_size = (int(image.width * ratio), int(image.height * ratio))
-                        image = image.resize(new_size, Image.Resampling.LANCZOS)
-                        print(f"📏 图片 {i+1} 已调整大小: {new_size}")
-
-                    base64_str = self.pil_to_base64(image)
-                    if not base64_str:
-                        print(f"❌ 图片 {i+1} 编码失败")
+            if len(image_paths) > 0:
+                for i, path in enumerate(image_paths):
+                    if not os.path.exists(path):
+                        print(f"❌ 图片文件不存在: {path}")
                         if progress_callback:
-                            progress_callback(f"❌ 图片 {i+1} 编码失败", 20, 100)
+                            progress_callback(f"❌ 图片文件不存在: {path}", 20, 100)
                         return None
 
-                    base64_images.append(base64_str)
-                    print(f"✅ 图片 {i+1} 处理完成")
-                    if progress_callback:
-                        progress_callback(
-                            f"✅ 图片 {i+1} 处理完成", 20 + (i + 1) * 10, 100
-                        )
+                    try:
+                        image = Image.open(path)
+                        if image.mode != "RGB":
+                            image = image.convert("RGB")
 
-                except Exception as e:
-                    print(f"❌ 处理图片 {i+1} 时出错: {str(e)}")
-                    if progress_callback:
-                        progress_callback(
-                            f"❌ 处理图片 {i+1} 时出错: {str(e)}", 20, 100
-                        )
-                    return None
+                        # 调整图片大小以符合API要求
+                        max_size = 2048
+                        if max(image.size) > max_size:
+                            ratio = max_size / max(image.size)
+                            new_size = (
+                                int(image.width * ratio),
+                                int(image.height * ratio),
+                            )
+                            image = image.resize(new_size, Image.Resampling.LANCZOS)
+                            print(f"📏 图片 {i+1} 已调整大小: {new_size}")
+
+                        base64_str = self.pil_to_base64(image)
+                        if not base64_str:
+                            print(f"❌ 图片 {i+1} 编码失败")
+                            if progress_callback:
+                                progress_callback(f"❌ 图片 {i+1} 编码失败", 20, 100)
+                            return None
+
+                        base64_images.append(base64_str)
+                        print(f"✅ 图片 {i+1} 处理完成")
+                        if progress_callback:
+                            progress_callback(
+                                f"✅ 图片 {i+1} 处理完成", 20 + (i + 1) * 10, 100
+                            )
+
+                    except Exception as e:
+                        print(f"❌ 处理图片 {i+1} 时出错: {str(e)}")
+                        if progress_callback:
+                            progress_callback(
+                                f"❌ 处理图片 {i+1} 时出错: {str(e)}", 20, 100
+                            )
+                        return None
 
             # 构建API请求
             if progress_callback:
@@ -210,12 +219,14 @@ class FluxKontextNativeMultiEditor:
 
             payload = {
                 "prompt": edit_instruction,
-                "input_image": base64_images[0],  # 主要图片
                 "aspect_ratio": aspect_ratio,
                 "safety_tolerance": safety_tolerance,
                 "output_format": output_format,
                 "prompt_upsampling": prompt_upsampling,
             }
+
+            if len(base64_images) > 0:
+                payload["input_image"] = base64_images[0]
 
             # 添加额外的图片
             if len(base64_images) > 1:
@@ -279,7 +290,7 @@ class FluxKontextNativeMultiEditor:
                         )
 
                     result_image.save(output_path, format=output_format.upper())
-                    print(f"✅ 原生多图片编辑完成! 保存到: {output_path}")
+                    print(f"✅  完成! 保存到: {output_path}")
                     if progress_callback:
                         progress_callback("🎉 图片编辑完成！", 100, 100)
                     return output_path
@@ -336,7 +347,6 @@ class FluxKontextNativeMultiEditor:
     def wait_for_result(self, polling_url, max_attempts=30, progress_callback=None):
         """等待API处理结果"""
         print(f"⏳ 等待处理结果: {polling_url}")
-       
 
         if progress_callback:
             progress_callback("🚀 任务已提交，开始处理...", 0, max_attempts)
@@ -356,7 +366,7 @@ class FluxKontextNativeMultiEditor:
                 print(f"🔄 尝试 {attempt}/{max_attempts} - 等待 {wait_time}秒")
                 time.sleep(wait_time)
 
-                # 检查任务状态 
+                # 检查任务状态
                 headers = {"x-key": os.environ["X_KEY"]}
                 print(f"🔄 检查任务状态: {polling_url}")
 
